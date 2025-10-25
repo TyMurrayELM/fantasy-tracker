@@ -20,6 +20,21 @@ const TeamRow = ({
 }) => {
   const weeklyHighPoints = highWeeks.length;
   
+  // Determine background color based on position (gradient from green to red)
+  const getBackgroundColor = () => {
+    if (position === 1) return 'bg-green-100';
+    if (position === 2) return 'bg-green-50';
+    if (position === 3) return 'bg-lime-50';
+    if (position === 4) return 'bg-yellow-50';
+    if (position === 5) return 'bg-yellow-100';
+    if (position === 6) return 'bg-yellow-100';
+    if (position === 7) return 'bg-orange-50';
+    if (position === 8) return 'bg-orange-100';
+    if (position === 9) return 'bg-red-50';
+    if (position === 10) return 'bg-red-100';
+    return 'bg-gray-50';
+  };
+  
   const calculateWinnings = () => {
     let total = -leagueConfig.buyIn;
     if (isFirstPlace) total += leagueConfig.firstPlace;
@@ -35,7 +50,7 @@ const TeamRow = ({
   const isSent = sentOwners.includes(owner);
 
   return (
-    <div className="p-3 sm:p-4 bg-gray-50 rounded-lg mb-3 sm:mb-4">
+    <div className={`p-3 sm:p-4 ${getBackgroundColor()} rounded-lg mb-3 sm:mb-4`}>
       {/* Team Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-0 mb-3 sm:mb-2">
         <h3 className="text-base sm:text-lg font-medium">
