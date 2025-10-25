@@ -105,17 +105,23 @@ const TeamRow = ({
           Weekly High Points: {weeklyHighPoints} × ${leagueConfig.weeklyHigh} = ${weeklyHighPoints * leagueConfig.weeklyHigh}
         </div>
         <div className="grid grid-cols-7 sm:grid-cols-7 gap-1 sm:gap-2">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map(week => (
-            <div key={week} className="flex items-center justify-center sm:justify-start">
-              <input 
-                type="checkbox" 
-                checked={highWeeks.includes(week)} 
-                readOnly 
-                className="mr-0.5 sm:mr-1 w-3 h-3 sm:w-4 sm:h-4" 
-              />
-              <span className="text-[10px] sm:text-xs">W{week}</span>
-            </div>
-          ))}
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map(week => {
+            const currentWeek = 7; // Update this as the season progresses
+            const hasHappened = week <= currentWeek;
+            
+            return (
+              <div key={week} className={`flex items-center justify-center sm:justify-start ${!hasHappened ? 'opacity-30' : ''}`}>
+                <input 
+                  type="checkbox" 
+                  checked={highWeeks.includes(week)} 
+                  readOnly 
+                  disabled={!hasHappened}
+                  className="mr-0.5 sm:mr-1 w-3 h-3 sm:w-4 sm:h-4" 
+                />
+                <span className="text-[10px] sm:text-xs">W{week}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -342,22 +348,33 @@ export default function Home() {
           </div>
 
           {teams.map((team, index) => (
-            <TeamRow
-              key={index}
-              position={index + 1}
-              team={team.name}
-              owner={team.owner}
-              pf={team.pf}
-              pa={team.pa}
-              isSeasonChamp={team.isSeasonChamp}
-              isROY={team.isROY}
-              isHighScoringNonQB={team.isHighScoringNonQB}
-              isHighScoringQB={team.isHighScoringQB}
-              highWeeks={team.highWeeks}
-              isPaid={paidOwners.includes(team.owner)}
-              isFirstPlace={team.isFirstPlace}
-              isSecondPlace={team.isSecondPlace}
-            />
+            <>
+              <TeamRow
+                key={index}
+                position={index + 1}
+                team={team.name}
+                owner={team.owner}
+                pf={team.pf}
+                pa={team.pa}
+                isSeasonChamp={team.isSeasonChamp}
+                isROY={team.isROY}
+                isHighScoringNonQB={team.isHighScoringNonQB}
+                isHighScoringQB={team.isHighScoringQB}
+                highWeeks={team.highWeeks}
+                isPaid={paidOwners.includes(team.owner)}
+                isFirstPlace={team.isFirstPlace}
+                isSecondPlace={team.isSecondPlace}
+              />
+              {index === 5 && (
+                <div className="flex items-center my-4 sm:my-6">
+                  <div className="flex-grow border-t-2 border-gray-400"></div>
+                  <span className="px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-600 bg-gray-100 rounded-full">
+                    PLAYOFF LINE
+                  </span>
+                  <div className="flex-grow border-t-2 border-gray-400"></div>
+                </div>
+              )}
+            </>
           ))}
 
           <div className="bg-blue-50 p-3 sm:p-4 rounded-lg mt-4 sm:mt-6 mb-3 sm:mb-4">
