@@ -322,6 +322,7 @@ export default function Home() {
           <div className="bg-blue-50 p-3 sm:p-4 rounded-lg mb-4 sm:mb-6">
             <div className="text-base sm:text-lg font-bold">
               League Buy-in Total: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalBuyIn)}
+              <span className="text-sm sm:text-base font-normal text-gray-600 ml-2">(${leagueConfig.buyIn}/team)</span>
             </div>
           </div>
 
