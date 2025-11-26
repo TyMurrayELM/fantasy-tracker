@@ -33,7 +33,7 @@ export const teamsData = [
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: [2, 5]  // Weeks with high points
+    highWeeks: [2, 5, 10]  // Weeks with high points
   },
   {
     name: 'PDickson',
@@ -72,7 +72,7 @@ export const teamsData = [
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: []
+    highWeeks: [8]
   },
   {
     name: 'Herbert, Henry & Assoc.',
@@ -111,7 +111,7 @@ export const teamsData = [
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: []
+    highWeeks: [11]
   },
   {
     name: 'Jokic',
@@ -124,7 +124,7 @@ export const teamsData = [
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: []
+    highWeeks: [9]
   },
   {
     name: 'Chappelle Moan',
@@ -150,7 +150,7 @@ export const teamsData = [
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: []
+    highWeeks: [12]
   }
 ];
 

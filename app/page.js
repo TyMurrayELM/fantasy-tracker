@@ -106,7 +106,7 @@ const TeamRow = ({
         </div>
         <div className="grid grid-cols-7 sm:grid-cols-7 gap-1 sm:gap-2">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map(week => {
-            const currentWeek = 7; // Update this as the season progresses
+            const currentWeek = 12; // Update this as the season progresses
             const hasHappened = week <= currentWeek;
             
             return (
@@ -171,13 +171,13 @@ const PayoutStructure = () => {
           </h3>
           <div className="space-y-2 sm:space-y-3">
             <div className="flex justify-between items-center p-2 sm:p-3 bg-yellow-50 rounded">
-              <span className="font-semibold text-base sm:text-lg">🥇 1st Place</span>
+              <span className="font-semibold text-base sm:text-lg">ðŸ¥‡ 1st Place</span>
               <span className="text-xl sm:text-2xl font-bold text-green-600">
                 ${leagueConfig.firstPlace}
               </span>
             </div>
             <div className="flex justify-between items-center p-2 sm:p-3 bg-gray-50 rounded">
-              <span className="font-semibold text-base sm:text-lg">🥈 2nd Place</span>
+              <span className="font-semibold text-base sm:text-lg">ðŸ¥ˆ 2nd Place</span>
               <span className="text-xl sm:text-2xl font-bold text-green-600">
                 ${leagueConfig.secondPlace}
               </span>
@@ -200,25 +200,25 @@ const PayoutStructure = () => {
           </h3>
           <div className="space-y-2 sm:space-y-3">
             <div className="flex justify-between items-center p-2 sm:p-3 bg-green-50 rounded">
-              <span className="font-semibold text-sm sm:text-base">🏆 Regular Season Champ</span>
+              <span className="font-semibold text-sm sm:text-base">ðŸ† Regular Season Champ</span>
               <span className="text-lg sm:text-xl font-bold text-green-600">
                 ${leagueConfig.regularSeasonChamp}
               </span>
             </div>
             <div className="flex justify-between items-center p-2 sm:p-3 bg-gray-50 rounded">
-              <span className="font-semibold text-sm sm:text-base">⭐ OROY</span>
+              <span className="font-semibold text-sm sm:text-base">â­ OROY</span>
               <span className="text-lg sm:text-xl font-bold text-green-600">
                 ${leagueConfig.oroy}
               </span>
             </div>
             <div className="flex justify-between items-center p-2 sm:p-3 bg-gray-50 rounded">
-              <span className="font-semibold text-sm sm:text-base">💪 High Scoring Non-QB</span>
+              <span className="font-semibold text-sm sm:text-base">ðŸ’ª High Scoring Non-QB</span>
               <span className="text-lg sm:text-xl font-bold text-green-600">
                 ${leagueConfig.highScoringNonQB}
               </span>
             </div>
             <div className="flex justify-between items-center p-2 sm:p-3 bg-gray-50 rounded">
-              <span className="font-semibold text-sm sm:text-base">🎯 High Scoring QB</span>
+              <span className="font-semibold text-sm sm:text-base">ðŸŽ¯ High Scoring QB</span>
               <span className="text-lg sm:text-xl font-bold text-green-600">
                 ${leagueConfig.highScoringQB}
               </span>
@@ -242,7 +242,7 @@ const PayoutStructure = () => {
         </h3>
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-0 p-3 sm:p-4 bg-purple-50 rounded-lg">
           <div>
-            <div className="font-semibold text-base sm:text-lg">📊 Weekly High Points</div>
+            <div className="font-semibold text-base sm:text-lg">ðŸ“Š Weekly High Points</div>
             <div className="text-xs sm:text-sm text-gray-600 mt-1">14 weeks × ${leagueConfig.weeklyHigh} per week</div>
           </div>
           <div className="text-left sm:text-right">
