@@ -31,8 +31,8 @@ export const teamsData = [
     isFirstPlace: false,
     isSecondPlace: false,
     isROY: false,
-    isHighScoringNonQB: false,
-    isHighScoringQB: false,
+    isHighScoringNonQB: true,
+    isHighScoringQB: true,
     highWeeks: [2, 5, 10, 14]
   },
   {
@@ -157,8 +157,8 @@ export const teamsData = [
 // Award winners - update these each season
 export const awardWinners = {
   oroy: '',
-  highScoringNonQB: '',
-  highScoringQB: ''
+  highScoringNonQB: 'Christian McCaffrey (297 pts)',
+  highScoringQB: 'Matthew Stafford (341 pts)'
 };
 
 // Owners who have paid - update as payments come in
