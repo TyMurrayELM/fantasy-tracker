@@ -27,26 +27,13 @@ export const teamsData = [
     owner: 'Renaldo',
     pf: '1228.72',
     pa: '983.96',
-    isSeasonChamp: false,
+    isSeasonChamp: true,
     isFirstPlace: false,
     isSecondPlace: false,
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: [2, 5, 10]  // Weeks with high points
-  },
-  {
-    name: 'PDickson',
-    owner: 'Pat',
-    pf: '1151.6',
-    pa: '926.62',
-    isSeasonChamp: false,
-    isFirstPlace: false,
-    isSecondPlace: false,
-    isROY: false,
-    isHighScoringNonQB: false,
-    isHighScoringQB: false,
-    highWeeks: [6]
+    highWeeks: [2, 5, 10, 14]
   },
   {
     name: 'Nabers Know My Name',
@@ -72,20 +59,7 @@ export const teamsData = [
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: [8]
-  },
-  {
-    name: 'Herbert, Henry & Assoc.',
-    owner: 'Jon',
-    pf: '1102.36',
-    pa: '1148.48',
-    isSeasonChamp: false,
-    isFirstPlace: false,
-    isSecondPlace: false,
-    isROY: false,
-    isHighScoringNonQB: false,
-    isHighScoringQB: false,
-    highWeeks: [7]
+    highWeeks: [8, 13]
   },
   {
     name: 'ChocolateEclair',
@@ -101,19 +75,6 @@ export const teamsData = [
     highWeeks: [3]
   },
   {
-    name: 'The Life of a Throwboy',
-    owner: 'Brett',
-    pf: '1047.14',
-    pa: '1084.7',
-    isSeasonChamp: false,
-    isFirstPlace: false,
-    isSecondPlace: false,
-    isROY: false,
-    isHighScoringNonQB: false,
-    isHighScoringQB: false,
-    highWeeks: [11]
-  },
-  {
     name: 'Jokic',
     owner: 'Collin',
     pf: '893.44',
@@ -127,17 +88,43 @@ export const teamsData = [
     highWeeks: [9]
   },
   {
-    name: 'Chappelle Moan',
-    owner: 'Tyler Z',
-    pf: '1063.78',
-    pa: '1163.02',
+    name: 'PDickson',
+    owner: 'Pat',
+    pf: '1151.6',
+    pa: '926.62',
     isSeasonChamp: false,
     isFirstPlace: false,
     isSecondPlace: false,
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: [4]
+    highWeeks: [6]
+  },
+  {
+    name: 'Herbert, Henry & Assoc.',
+    owner: 'Jon',
+    pf: '1102.36',
+    pa: '1148.48',
+    isSeasonChamp: false,
+    isFirstPlace: false,
+    isSecondPlace: false,
+    isROY: false,
+    isHighScoringNonQB: false,
+    isHighScoringQB: false,
+    highWeeks: [7]
+  },
+  {
+    name: 'The Life of a Throwboy',
+    owner: 'Brett',
+    pf: '1047.14',
+    pa: '1084.7',
+    isSeasonChamp: false,
+    isFirstPlace: false,
+    isSecondPlace: false,
+    isROY: false,
+    isHighScoringNonQB: false,
+    isHighScoringQB: false,
+    highWeeks: [11]
   },
   {
     name: 'Tua Girls One Darty Cup',
@@ -151,6 +138,19 @@ export const teamsData = [
     isHighScoringNonQB: false,
     isHighScoringQB: false,
     highWeeks: [12]
+  },
+  {
+    name: 'Chappelle Moan',
+    owner: 'Tyler Z',
+    pf: '1063.78',
+    pa: '1163.02',
+    isSeasonChamp: false,
+    isFirstPlace: false,
+    isSecondPlace: false,
+    isROY: false,
+    isHighScoringNonQB: false,
+    isHighScoringQB: false,
+    highWeeks: [4]
   }
 ];
 
