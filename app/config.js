@@ -23,30 +23,30 @@ export const leagueConfig = {
 // Team data - update this for each new season
 export const teamsData = [
   {
+    name: 'Nabers Know My Name',
+    owner: 'Ryan',
+    pf: '1079.02',
+    pa: '1058.58',
+    isSeasonChamp: false,
+    isFirstPlace: true,
+    isSecondPlace: false,
+    isROY: false,
+    isHighScoringNonQB: false,
+    isHighScoringQB: false,
+    highWeeks: [1]
+  },
+  {
     name: 'FloorBangers',
     owner: 'Renaldo',
     pf: '1228.72',
     pa: '983.96',
     isSeasonChamp: true,
     isFirstPlace: false,
-    isSecondPlace: false,
+    isSecondPlace: true,
     isROY: false,
     isHighScoringNonQB: true,
     isHighScoringQB: true,
     highWeeks: [2, 5, 10, 14]
-  },
-  {
-    name: 'Nabers Know My Name',
-    owner: 'Ryan',
-    pf: '1079.02',
-    pa: '1058.58',
-    isSeasonChamp: false,
-    isFirstPlace: false,
-    isSecondPlace: false,
-    isROY: false,
-    isHighScoringNonQB: false,
-    isHighScoringQB: false,
-    highWeeks: [1]
   },
   {
     name: "Jag'n Off",
@@ -162,7 +162,7 @@ export const awardWinners = {
 };
 
 // Owners who have paid - update as payments come in
-export const paidOwners = [];
+export const paidOwners = ['Collin', 'Tyler M', 'Jon', 'Rich'];
 
 // Owners who have sent money (for positive balances) - update as payments are sent
 export const sentOwners = [];
