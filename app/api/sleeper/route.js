@@ -1,11 +1,15 @@
 // GET /api/sleeper — standings, points, records and weekly high scores for
 // the league in config.js, straight from Sleeper's public API (no auth).
-// Only completed weeks count toward weekly highs. Cached one minute.
+// Only completed weeks count toward weekly highs; the week in progress is
+// reported separately as "so far". The route is dynamic (the 14 MB player
+// file can't go through Next's static/data cache) and the CDN holds the
+// response for a minute.
 
 import { NextResponse } from 'next/server';
 import { leagueConfig } from '../../config';
 
-export const revalidate = 60;
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const BASE = 'https://api.sleeper.app/v1';
 
@@ -97,9 +101,13 @@ export async function GET() {
       ? weeks
       : Math.max(0, Math.min(weeks, (state.week ?? 1) - 1));
 
-    const weekPages = await Promise.all(
-      Array.from({ length: completedWeeks }, (_, i) => get(`/league/${cfg.leagueId}/matchups/${i + 1}`))
-    );
+    const inProgressWeek = sameSeason && state.season_type === 'regular' && (state.week ?? 0) > completedWeeks && (state.week ?? 0) <= weeks
+      ? state.week
+      : null;
+    const [weekPages, livePage] = await Promise.all([
+      Promise.all(Array.from({ length: completedWeeks }, (_, i) => get(`/league/${cfg.leagueId}/matchups/${i + 1}`))),
+      inProgressWeek ? get(`/league/${cfg.leagueId}/matchups/${inProgressWeek}`).catch(() => null) : Promise.resolve(null),
+    ]);
     const highWeeks = new Map(); // roster_id -> [weeks]
     const weekly = []; // { week, rosterIds, points } — a tie shares the week
     weekPages.forEach((page, i) => {
@@ -164,6 +172,21 @@ export async function GET() {
       };
     });
     const byRoster = new Map(teams.map((t) => [t.rosterId, t]));
+    // Week in progress: the current leader for the weekly high (partial scores)
+    let currentWeek = null;
+    if (inProgressWeek) {
+      let best = null;
+      for (const m of livePage ?? []) {
+        if (typeof m.points !== 'number') continue;
+        if (!best || m.points > best.points) best = { rosterId: m.roster_id, points: m.points };
+      }
+      const t = best ? byRoster.get(best.rosterId) : null;
+      currentWeek = {
+        week: inProgressWeek,
+        started: !!best && best.points > 0,
+        leader: best && best.points > 0 ? { owner: t?.owner ?? '', name: t?.name ?? '', points: Math.round(best.points * 100) / 100 } : null,
+      };
+    }
     const weeklyHighs = weekly.map((w) => ({
       week: w.week,
       points: w.points,
@@ -228,8 +251,9 @@ export async function GET() {
       teams,
       weeklyHighs,
       leaders,
+      currentWeek,
       fetchedAt: new Date().toISOString(),
-    });
+    }, { headers: { 'Cache-Control': 's-maxage=60, stale-while-revalidate=300' } });
   } catch (e) {
     return NextResponse.json({ success: false, error: e instanceof Error ? e.message : String(e) }, { status: 502 });
   }

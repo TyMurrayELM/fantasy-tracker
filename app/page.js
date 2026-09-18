@@ -59,6 +59,7 @@ function useLeague() {
         fetchedAt: null,
         weeklyHighs: [],
         leaders: { qb: [], nonQb: [] },
+        currentWeek: null,
       };
     }
     const blank = { isSeasonChamp: false, isFirstPlace: false, isSecondPlace: false, isROY: false, isHighScoringNonQB: false, isHighScoringQB: false };
@@ -73,6 +74,7 @@ function useLeague() {
       league: live.league,
       weeklyHighs: live.weeklyHighs ?? [],
       leaders: live.leaders ?? { qb: [], nonQb: [] },
+      currentWeek: live.currentWeek ?? null,
     };
   }, [live, error]);
 }
@@ -283,6 +285,9 @@ function buildRecap(league) {
     const gap = b ? ` (${(a.points - b.points).toFixed(1)} up on ${b.name})` : '';
     out.push(`${label}: ${a.name}, ${a.points.toFixed(1)} pts${a.owner ? ` — ${a.owner}` : ''}${gap} → +${usd(prize)}`);
   };
+  if (league.currentWeek?.leader) {
+    out.push(`⏳ Week ${league.currentWeek.week} so far: ${league.currentWeek.leader.owner} leads at ${league.currentWeek.leader.points.toFixed(2)} (games in progress)`);
+  }
   lead(league.leaders.qb, '🎯 Top QB so far', leagueConfig.highScoringQB);
   lead(league.leaders.nonQb, '💪 Top non-QB so far', leagueConfig.highScoringNonQB);
   return out.join('\n');
@@ -342,6 +347,21 @@ function Standings({ league }) {
           </div>
         ))}
       </div>
+
+      {league.currentWeek && (
+        <div className="flex items-center gap-2 rounded-xl bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-200/70 dark:ring-amber-800/60 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300 shrink-0">Week {league.currentWeek.week} so far</span>
+          {league.currentWeek.leader ? (
+            <span className="truncate">
+              <span className="font-semibold">{league.currentWeek.leader.owner}</span> leads the weekly high at{' '}
+              <span className="font-semibold tabular-nums">{league.currentWeek.leader.points.toFixed(2)}</span>
+              <span className="text-amber-700/80 dark:text-amber-300/80"> · games still in progress</span>
+            </span>
+          ) : (
+            <span className="text-amber-800/80 dark:text-amber-200/80">no games played yet</span>
+          )}
+        </div>
+      )}
 
       {/* Venmo */}
       <div className="flex items-center gap-2.5 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200/70 dark:ring-slate-800 px-3 py-2.5 text-sm">
@@ -492,11 +512,21 @@ function Payouts({ league }) {
                   <span className="text-slate-500 dark:text-slate-400 text-xs"> · {w.winners.map((x) => x.name).filter(Boolean).join(' & ')}</span>
                   {w.winners.length > 1 && <span className="text-[11px] text-amber-600"> · tie</span>}
                 </div>
+              ) : league.currentWeek?.week === week ? (
+                <div className="min-w-0 text-amber-700 dark:text-amber-300">
+                  {league.currentWeek.leader
+                    ? <><span className="font-medium">{league.currentWeek.leader.owner}</span><span className="text-xs"> · leading so far, games in progress</span></>
+                    : <span className="text-xs">in progress · no games played yet</span>}
+                </div>
               ) : (
                 <div className="text-xs">{league.live ? 'not played yet' : '—'}</div>
               )}
               <div className="text-right tabular-nums">
-                {w ? <span className="font-semibold">{w.points.toFixed(2)}</span> : null}
+                {w
+                  ? <span className="font-semibold">{w.points.toFixed(2)}</span>
+                  : league.currentWeek?.week === week && league.currentWeek.leader
+                    ? <span className="text-amber-700 dark:text-amber-300">{league.currentWeek.leader.points.toFixed(2)}</span>
+                    : null}
               </div>
             </div>
           );
