@@ -106,7 +106,7 @@ const TeamRow = ({
         </div>
         <div className="grid grid-cols-7 sm:grid-cols-7 gap-1 sm:gap-2">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map(week => {
-            const currentWeek = 14; // Update this as the season progresses
+            const currentWeek = leagueConfig.currentWeek ?? 14; // set in config.js
             const hasHappened = week <= currentWeek;
             
             return (

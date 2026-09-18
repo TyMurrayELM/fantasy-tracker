@@ -3,170 +3,166 @@
 
 export const leagueConfig = {
   // Prize structure
-  buyIn: 186,
-  firstPlace: 952,
-  secondPlace: 290,
-  regularSeasonChamp: 185,
-  oroy: 65,
-  highScoringNonQB: 65,
-  highScoringQB: 65,
-  weeklyHigh: 17,
+  buyIn: 169,
+  firstPlace: 865,
+  secondPlace: 265,
+  regularSeasonChamp: 170,
+  oroy: 60,
+  highScoringNonQB: 60,
+  highScoringQB: 60,
+  weeklyHigh: 15,
 
   // Payment information
   venmoUsername: 'TylerMurray',
   venmoUrl: 'https://venmo.com/TylerMurray',
   
   // Season year (for display)
-  season: '2026',
-
-  // Last completed NFL week — later weeks show greyed out on the weekly-high grid
-  currentWeek: 1,
+  season: '2025',
 };
 
 // Team data - update this for each new season
-// 2026: team names carried over from 2025 as placeholders — replace with this year's names
 export const teamsData = [
   {
     name: 'Nabers Know My Name',
     owner: 'Ryan',
-    pf: '0',
-    pa: '0',
+    pf: '1079.02',
+    pa: '1058.58',
     isSeasonChamp: false,
-    isFirstPlace: false,
+    isFirstPlace: true,
     isSecondPlace: false,
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: []
+    highWeeks: [1]
   },
   {
     name: 'FloorBangers',
     owner: 'Renaldo',
-    pf: '0',
-    pa: '0',
-    isSeasonChamp: false,
+    pf: '1228.72',
+    pa: '983.96',
+    isSeasonChamp: true,
     isFirstPlace: false,
-    isSecondPlace: false,
+    isSecondPlace: true,
     isROY: false,
-    isHighScoringNonQB: false,
-    isHighScoringQB: false,
-    highWeeks: []
+    isHighScoringNonQB: true,
+    isHighScoringQB: true,
+    highWeeks: [2, 5, 10, 14]
   },
   {
     name: "Jag'n Off",
     owner: 'Tyler M',
-    pf: '0',
-    pa: '0',
+    pf: '1132.74',
+    pa: '1199.12',
     isSeasonChamp: false,
     isFirstPlace: false,
     isSecondPlace: false,
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: []
+    highWeeks: [8, 13]
   },
   {
     name: 'ChocolateEclair',
     owner: 'Rich',
-    pf: '0',
-    pa: '0',
+    pf: '1066.12',
+    pa: '1161.14',
     isSeasonChamp: false,
     isFirstPlace: false,
     isSecondPlace: false,
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: []
+    highWeeks: [3]
   },
   {
     name: 'Jokic',
     owner: 'Collin',
-    pf: '0',
-    pa: '0',
+    pf: '893.44',
+    pa: '1011.72',
     isSeasonChamp: false,
     isFirstPlace: false,
     isSecondPlace: false,
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: []
+    highWeeks: [9]
   },
   {
     name: 'PDickson',
     owner: 'Pat',
-    pf: '0',
-    pa: '0',
+    pf: '1151.6',
+    pa: '926.62',
     isSeasonChamp: false,
     isFirstPlace: false,
     isSecondPlace: false,
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: []
+    highWeeks: [6]
   },
   {
     name: 'Herbert, Henry & Assoc.',
     owner: 'Jon',
-    pf: '0',
-    pa: '0',
+    pf: '1102.36',
+    pa: '1148.48',
     isSeasonChamp: false,
     isFirstPlace: false,
     isSecondPlace: false,
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: []
+    highWeeks: [7]
   },
   {
     name: 'The Life of a Throwboy',
     owner: 'Brett',
-    pf: '0',
-    pa: '0',
+    pf: '1047.14',
+    pa: '1084.7',
     isSeasonChamp: false,
     isFirstPlace: false,
     isSecondPlace: false,
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: []
+    highWeeks: [11]
   },
   {
     name: 'Tua Girls One Darty Cup',
     owner: 'Art',
-    pf: '0',
-    pa: '0',
+    pf: '984.14',
+    pa: '1112.7',
     isSeasonChamp: false,
     isFirstPlace: false,
     isSecondPlace: false,
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: []
+    highWeeks: [12]
   },
   {
     name: 'Chappelle Moan',
     owner: 'Tyler Z',
-    pf: '0',
-    pa: '0',
+    pf: '1063.78',
+    pa: '1163.02',
     isSeasonChamp: false,
     isFirstPlace: false,
     isSecondPlace: false,
     isROY: false,
     isHighScoringNonQB: false,
     isHighScoringQB: false,
-    highWeeks: []
+    highWeeks: [4]
   }
 ];
 
 // Award winners - update these each season
 export const awardWinners = {
   oroy: '',
-  highScoringNonQB: '',
-  highScoringQB: ''
+  highScoringNonQB: 'Christian McCaffrey (297 pts)',
+  highScoringQB: 'Matthew Stafford (341 pts)'
 };
 
 // Owners who have paid - update as payments come in
-export const paidOwners = [];
+export const paidOwners = ['Collin', 'Tyler M', 'Jon', 'Rich'];
 
 // Owners who have sent money (for positive balances) - update as payments are sent
 export const sentOwners = [];
