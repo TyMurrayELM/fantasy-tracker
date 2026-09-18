@@ -386,7 +386,13 @@ function Standings({ league }) {
       <div className="flex items-center gap-2.5 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200/70 dark:ring-slate-800 px-3 py-2.5 text-sm">
         <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold tracking-wide text-white shrink-0" style={{ backgroundColor: '#008CFF' }} aria-hidden>venmo</span>
         <span className="text-slate-600 dark:text-slate-300">
-          Owe money? Venmo{' '}
+          {league.completedWeeks < league.weeks - 1 ? (
+            <>
+              <span className="font-semibold">Hold your money for now.</span> Dues are settled in week {league.weeks}, the last week before the playoffs. When it&apos;s time, Venmo{' '}
+            </>
+          ) : (
+            <>Owe money? Venmo{' '}</>
+          )}
           <a href={leagueConfig.venmoUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-sky-600 dark:text-sky-400 hover:underline">
             @{leagueConfig.venmoUsername}
           </a>
