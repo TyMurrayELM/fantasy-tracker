@@ -151,6 +151,7 @@ function TeamRow({ team, rank, count, open, onToggle, weeks, completedWeeks }) {
   // Row colour = the NFL team carrying this roster's points-for so far;
   // falls back to the rank gradient until Sleeper data lands.
   const nfl = team.topNflTeam ?? null;
+  const nflTop = team.topNflTeams ?? (nfl ? [nfl] : []);
   const accent = nfl?.color ? `#${nfl.color}` : rankBar(rank - 1, count);
   const nflTitle = nfl ? `${nfl.name} players: ${nfl.points.toFixed(1)} of this team's starter points (${Math.round(nfl.share * 100)}%)` : undefined;
 
@@ -170,9 +171,21 @@ function TeamRow({ team, rank, count, open, onToggle, weeks, completedWeeks }) {
         <div className="text-sm font-semibold tabular-nums text-slate-400">{rank}</div>
         <div className="min-w-0">
           <div className="flex items-center gap-2 min-w-0">
-            {nfl?.logo && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={nfl.logo} alt={nfl.name} className="w-5 h-5 object-contain shrink-0" loading="lazy" />
+            {nflTop.length > 0 && (
+              <span className="flex items-center shrink-0" title={nflTop.map((x) => `${x.nick} ${x.points.toFixed(1)} (${Math.round(x.share * 100)}%)`).join(' · ')}>
+                {nflTop.map((x, i) =>
+                  x.logo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={x.abbr}
+                      src={x.logo}
+                      alt={x.name}
+                      className={`object-contain ${i === 0 ? 'w-5 h-5' : 'w-4 h-4 opacity-70'} ${i > 0 ? '-ml-1' : ''}`}
+                      loading="lazy"
+                    />
+                  ) : null
+                )}
+              </span>
             )}
             <span className="text-[15px] font-semibold tracking-[-0.2px] truncate">{team.name}</span>
             <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0">{team.owner}</span>
@@ -253,13 +266,19 @@ function TeamRow({ team, rank, count, open, onToggle, weeks, completedWeeks }) {
             <div className="text-[11px] text-slate-400 mt-1.5">
               Through week {completedWeeks} of {weeks}
             </div>
-            {nfl && (
-              <div className="flex items-center gap-1.5 mt-3 text-xs text-slate-500 dark:text-slate-400">
-                {nfl.logo && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={nfl.logo} alt="" className="w-4 h-4 object-contain" />
-                )}
-                <span>Carried by the <span className="font-medium" style={{ color: accent }}>{nfl.nick}</span>: {nfl.points.toFixed(1)} pts, {Math.round(nfl.share * 100)}% of starter points</span>
+            {nflTop.length > 0 && (
+              <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                <div className="text-[11px] uppercase tracking-wide text-slate-400">Where the points come from</div>
+                {nflTop.map((x, i) => (
+                  <div key={x.abbr} className="flex items-center gap-1.5 tabular-nums">
+                    {x.logo && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={x.logo} alt="" className="w-4 h-4 object-contain" />
+                    )}
+                    <span className={i === 0 ? 'font-medium' : ''} style={i === 0 ? { color: accent } : undefined}>{x.nick}</span>
+                    <span>{x.points.toFixed(1)} pts · {Math.round(x.share * 100)}%</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>

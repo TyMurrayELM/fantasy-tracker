@@ -210,19 +210,24 @@ export async function GET() {
             byTeam.set(abbr, (byTeam.get(abbr) ?? 0) + pts);
             total += pts;
           }
-          let best = null;
-          for (const [abbr, pts] of byTeam) if (!best || pts > best.pts) best = { abbr, pts };
-          if (best) {
-            const info = nfl?.get(best.abbr);
-            t.topNflTeam = {
-              abbr: best.abbr,
-              name: info?.name ?? best.abbr,
-              nick: info?.nick ?? best.abbr,
-              points: Math.round(best.pts * 100) / 100,
-              share: total > 0 ? Math.round((best.pts / total) * 1000) / 1000 : 0,
-              color: info?.color ?? null,
-              logo: info?.logo ?? null,
-            };
+          const ranked = [...byTeam.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([abbr, pts]) => {
+              const info = nfl?.get(abbr);
+              return {
+                abbr,
+                name: info?.name ?? abbr,
+                nick: info?.nick ?? abbr,
+                points: Math.round(pts * 100) / 100,
+                share: total > 0 ? Math.round((pts / total) * 1000) / 1000 : 0,
+                color: info?.color ?? null,
+                logo: info?.logo ?? null,
+              };
+            });
+          if (ranked.length) {
+            t.topNflTeam = ranked[0];   // themes the row
+            t.topNflTeams = ranked;     // top three, icons on the row
           }
         }
         const rows = [...playerTotals.entries()].map(([id, t]) => {
