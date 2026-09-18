@@ -19,8 +19,32 @@ export const leagueConfig = {
   // Season year (for display)
   season: '2026',
 
+  // Sleeper league — standings, records, points and weekly highs come from
+  // the public API. 'owners' maps each Sleeper display name to the owner
+  // name used in teamsData / paidOwners / sentOwners below.
+  sleeper: {
+    leagueId: '1327677681654824960',
+    owners: {
+      murrmanty: 'Tyler M',
+      TeamJokic: 'Collin',
+      PartyArty: 'Art',
+      ChocolateEclair: 'Rich',
+      tziskin: 'Tyler Z',
+      FloorBangers: 'Renaldo',
+      ElOso83: 'Jon',
+      PDickson: 'Pat',
+      BrettBrown: 'Brett',
+      RyanKoenigsberg: 'Ryan',
+    },
+  },
+
+  // Fallbacks when Sleeper is unreachable (the API normally supplies these)
   // Last completed NFL week — later weeks show greyed out on the weekly-high grid
   currentWeek: 1,
+
+  // League shape
+  weeks: 14,        // regular-season weeks that pay a weekly high
+  playoffSpots: 6,  // teams above the playoff line
 };
 
 // Team data - update this for each new season

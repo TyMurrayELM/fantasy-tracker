@@ -1,17 +1,26 @@
 import './globals.css'
-import { Inter } from 'next/font/google'
+import { Inter_Tight } from 'next/font/google'
 
-const inter = Inter({ subsets: ['latin'] })
+const font = Inter_Tight({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'Dynasty Fantasy Football Dues Tracker',
-  description: 'Track fantasy football league dues, winnings, and payments',
+  title: 'Dues Tracker',
+  description: 'Fantasy football league dues, winnings, and payments',
+}
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f8fafc' },
+    { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
+  ],
 }
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>{children}</body>
+    <html lang="en" className={font.className}>
+      <body className="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">{children}</body>
     </html>
   )
 }

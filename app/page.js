@@ -1,399 +1,419 @@
 'use client';
 
-import { useState } from 'react';
+// Dues tracker: one row per team (rank, team, net dollars, payment status),
+// tap a row for the math; a summary strip up top answers "who still owes?"
+// Everything is driven by app/config.js.
+
+import { useEffect, useMemo, useState } from 'react';
 import { leagueConfig, teamsData, awardWinners, paidOwners, sentOwners } from './config';
 
-const TeamRow = ({ 
-  team, 
-  owner, 
-  position, 
-  pf, 
-  pa, 
-  isSeasonChamp, 
-  isROY, 
-  isHighScoringNonQB, 
-  isHighScoringQB, 
-  highWeeks,
-  isPaid,
-  isFirstPlace,
-  isSecondPlace
-}) => {
-  const weeklyHighPoints = highWeeks.length;
-  
-  // Determine background color based on position (gradient from green to red)
-  const getBackgroundColor = () => {
-    if (position === 1) return 'bg-green-100';
-    if (position === 2) return 'bg-green-50';
-    if (position === 3) return 'bg-lime-50';
-    if (position === 4) return 'bg-yellow-50';
-    if (position === 5) return 'bg-yellow-100';
-    if (position === 6) return 'bg-yellow-100';
-    if (position === 7) return 'bg-orange-50';
-    if (position === 8) return 'bg-orange-100';
-    if (position === 9) return 'bg-red-50';
-    if (position === 10) return 'bg-red-100';
-    return 'bg-gray-50';
-  };
-  
-  const calculateWinnings = () => {
-    let total = -leagueConfig.buyIn;
-    if (isFirstPlace) total += leagueConfig.firstPlace;
-    if (isSecondPlace) total += leagueConfig.secondPlace;
-    if (isSeasonChamp) total += leagueConfig.regularSeasonChamp;
-    if (isROY) total += leagueConfig.oroy;
-    if (isHighScoringNonQB) total += leagueConfig.highScoringNonQB;
-    if (isHighScoringQB) total += leagueConfig.highScoringQB;
-    total += weeklyHighPoints * leagueConfig.weeklyHigh;
-    return total;
-  };
+const usd = (n, cents = false) =>
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: cents ? 2 : 0,
+    maximumFractionDigits: cents ? 2 : 0,
+  }).format(n);
+const signed = (n) => (n > 0 ? `+${usd(n)}` : usd(n));
+const num = (s) => Number(s) || 0;
 
-  const isSent = sentOwners.includes(owner);
+const FALLBACK = {
+  weeks: leagueConfig.weeks ?? 14,
+  playoffSpots: leagueConfig.playoffSpots ?? 6,
+  completedWeeks: leagueConfig.currentWeek ?? 0,
+};
 
+// Live league state from Sleeper (standings, records, points, weekly
+// highs) merged with the config's award flags and payment lists by owner.
+// Until it loads — or if Sleeper is down — the config's own numbers show.
+function useLeague() {
+  const [live, setLive] = useState(null);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/sleeper')
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok || !j.success) throw new Error(j.error || `HTTP ${r.status}`);
+        if (!cancelled) setLive(j);
+      })
+      .catch((e) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return useMemo(() => {
+    const flagsByOwner = new Map(teamsData.map((t) => [t.owner, t]));
+    if (!live) {
+      return {
+        ...FALLBACK,
+        teams: teamsData.map((t) => ({ ...t, wins: null, losses: null, ties: null, pf: num(t.pf), pa: num(t.pa) })),
+        live: false,
+        error,
+        fetchedAt: null,
+      };
+    }
+    const blank = { isSeasonChamp: false, isFirstPlace: false, isSecondPlace: false, isROY: false, isHighScoringNonQB: false, isHighScoringQB: false };
+    return {
+      weeks: live.weeks,
+      playoffSpots: live.playoffSpots,
+      completedWeeks: live.completedWeeks,
+      teams: live.teams.map((t) => ({ ...blank, ...(flagsByOwner.get(t.owner) ?? {}), ...t })),
+      live: true,
+      error: null,
+      fetchedAt: live.fetchedAt,
+      league: live.league,
+    };
+  }, [live, error]);
+}
+
+// Everything one team earns or owes, itemised so the row and the expanded
+// breakdown never disagree.
+function ledgerFor(team) {
+  const lines = [{ label: 'Buy-in', amount: -leagueConfig.buyIn }];
+  if (team.isFirstPlace) lines.push({ label: '1st place', amount: leagueConfig.firstPlace });
+  if (team.isSecondPlace) lines.push({ label: '2nd place', amount: leagueConfig.secondPlace });
+  if (team.isSeasonChamp) lines.push({ label: 'Regular-season champ', amount: leagueConfig.regularSeasonChamp });
+  if (team.isROY) lines.push({ label: 'OROY', amount: leagueConfig.oroy, note: awardWinners.oroy });
+  if (team.isHighScoringNonQB) lines.push({ label: 'Top non-QB', amount: leagueConfig.highScoringNonQB, note: awardWinners.highScoringNonQB });
+  if (team.isHighScoringQB) lines.push({ label: 'Top QB', amount: leagueConfig.highScoringQB, note: awardWinners.highScoringQB });
+  const highs = team.highWeeks.length;
+  if (highs > 0) {
+    lines.push({
+      label: `Weekly high × ${highs}`,
+      amount: highs * leagueConfig.weeklyHigh,
+      note: `W${team.highWeeks.join(', W')}`,
+    });
+  }
+  const net = lines.reduce((s, l) => s + l.amount, 0);
+  return { lines, net };
+}
+
+// Rank colour: a thin bar that runs green → red down the standings
+const rankBar = (i, n) => {
+  const t = n <= 1 ? 0 : i / (n - 1); // 0 = top, 1 = bottom
+  const hue = 145 - t * 145; // 145 (green) → 0 (red)
+  return `hsl(${hue} 60% 48%)`;
+};
+
+const Badge = ({ children, tone = 'slate', title }) => {
+  const tones = {
+    slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+    gold: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+    green: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
+    blue: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200',
+  };
   return (
-    <div className={`p-3 sm:p-4 ${getBackgroundColor()} rounded-lg mb-3 sm:mb-4`}>
-      {/* Team Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-0 mb-3 sm:mb-2">
-        <h3 className="text-base sm:text-lg font-medium">
-          {position}. {team} <br />
-          <span className="text-gray-600 text-xs sm:text-sm">({owner})</span>
-        </h3>
-        <div className="flex sm:flex-col items-start sm:items-end gap-2 sm:gap-0">
-          <div className={`text-lg sm:text-lg font-bold ${calculateWinnings() >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(calculateWinnings())}
-          </div>
-          <div className={`text-xs px-2 py-0.5 rounded-full inline-block sm:mt-1 ${
-            calculateWinnings() >= 0 
-              ? (isSent ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')
-              : (isPaid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')
-          }`}>
-            {calculateWinnings() >= 0 ? (isSent ? 'Sent' : 'Not Sent') : (isPaid ? 'Paid' : 'Not Paid')}
-          </div>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="text-xs sm:text-sm mb-3 sm:mb-4">
-        PF: {parseInt(pf).toLocaleString()} | PA: {parseInt(pa).toLocaleString()}
-      </div>
-
-      {/* Achievements */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3 sm:mb-4">
-        <div>
-          <input type="checkbox" checked={isSeasonChamp} readOnly className="mr-2" />
-          <span className="text-sm">Reg Szn Champ</span>
-        </div>
-        <div>
-          <input type="checkbox" checked={isROY} readOnly className="mr-2" />
-          <span className="text-sm">OROY</span>
-          {isROY && <div className="text-xs text-gray-500 ml-4">{awardWinners.oroy}</div>}
-        </div>
-        <div>
-          <input type="checkbox" checked={isHighScoringNonQB} readOnly className="mr-2" />
-          <span className="text-sm">High Non-QB</span>
-          {isHighScoringNonQB && <div className="text-xs text-gray-500 ml-4">{awardWinners.highScoringNonQB}</div>}
-        </div>
-        <div>
-          <input type="checkbox" checked={isHighScoringQB} readOnly className="mr-2" />
-          <span className="text-sm">High QB</span>
-          {isHighScoringQB && <div className="text-xs text-gray-500 ml-4">{awardWinners.highScoringQB}</div>}
-        </div>
-      </div>
-
-      {/* Weekly Highs */}
-      <div className="mb-3 sm:mb-4">
-        <div className="text-xs sm:text-sm font-medium mb-2">
-          Weekly High Points: {weeklyHighPoints} × ${leagueConfig.weeklyHigh} = ${weeklyHighPoints * leagueConfig.weeklyHigh}
-        </div>
-        <div className="grid grid-cols-7 sm:grid-cols-7 gap-1 sm:gap-2">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map(week => {
-            const currentWeek = leagueConfig.currentWeek ?? 14; // set in config.js
-            const hasHappened = week <= currentWeek;
-            
-            return (
-              <div key={week} className={`flex items-center justify-center sm:justify-start ${!hasHappened ? 'opacity-30' : ''}`}>
-                <input 
-                  type="checkbox" 
-                  checked={highWeeks.includes(week)} 
-                  readOnly 
-                  disabled={!hasHappened}
-                  className="mr-0.5 sm:mr-1 w-3 h-3 sm:w-4 sm:h-4" 
-                />
-                <span className="text-[10px] sm:text-xs">W{week}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Calculation */}
-      <div className="text-[10px] sm:text-xs text-gray-500 border-t border-gray-200 pt-2">
-        <div>-${leagueConfig.buyIn} (buy-in)</div>
-        {isFirstPlace && <div>+${leagueConfig.firstPlace} (1st)</div>}
-        {isSecondPlace && <div>+${leagueConfig.secondPlace} (2nd)</div>}
-        {isSeasonChamp && <div>+${leagueConfig.regularSeasonChamp} (Reg Szn Champ)</div>}
-        {isROY && <div>+${leagueConfig.oroy} (OROY)</div>}
-        {isHighScoringNonQB && <div>+${leagueConfig.highScoringNonQB} (High Non-QB)</div>}
-        {isHighScoringQB && <div>+${leagueConfig.highScoringQB} (High QB)</div>}
-        {weeklyHighPoints > 0 && <div>+${weeklyHighPoints * leagueConfig.weeklyHigh} ({weeklyHighPoints} weekly highs)</div>}
-      </div>
-    </div>
+    <span title={title} className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-medium leading-4 ${tones[tone]}`}>
+      {children}
+    </span>
   );
 };
 
-const PayoutStructure = () => {
-  const totalPrizePool = leagueConfig.buyIn * 10; // Assuming 10 teams
-  const totalPayouts = 
-    leagueConfig.firstPlace + 
-    leagueConfig.secondPlace + 
-    leagueConfig.regularSeasonChamp + 
-    leagueConfig.oroy + 
-    leagueConfig.highScoringNonQB + 
-    leagueConfig.highScoringQB + 
-    (leagueConfig.weeklyHigh * 14); // 14 weeks
+const Pill = ({ ok, children }) => (
+  <span
+    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
+      ok
+        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+        : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+    }`}
+  >
+    <span className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-emerald-500' : 'bg-red-500'}`} />
+    {children}
+  </span>
+);
+
+function TeamRow({ team, rank, count, open, onToggle, weeks, completedWeeks }) {
+  const { lines, net } = ledgerFor(team);
+  const isPaid = paidOwners.includes(team.owner);
+  const isSent = sentOwners.includes(team.owner);
+  const settled = net >= 0 ? isSent : isPaid;
+  const statusText = net >= 0 ? (isSent ? 'Sent' : 'To send') : isPaid ? 'Paid' : 'Owes';
+  const highs = team.highWeeks.length;
 
   return (
-    <div className="p-3 sm:p-6">
-      <div className="bg-blue-50 p-4 sm:p-6 rounded-lg mb-4 sm:mb-6">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Total Prize Pool</h2>
-          <div className="text-2xl sm:text-3xl font-bold text-blue-600">
-            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalPrizePool)}
+    <div className="border-b border-slate-100 dark:border-slate-800 last:border-b-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="w-full text-left grid grid-cols-[1.75rem_1fr_auto] sm:grid-cols-[2rem_1fr_7rem_6rem] items-center gap-3 px-3 sm:px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition"
+        style={{ boxShadow: `inset 3px 0 0 ${rankBar(rank - 1, count)}` }}
+      >
+        <div className="text-sm font-semibold tabular-nums text-slate-400">{rank}</div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[15px] font-semibold tracking-[-0.2px] truncate">{team.name}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0">{team.owner}</span>
+            {team.wins !== null && team.wins !== undefined && (
+              <span className="text-xs font-medium tabular-nums text-slate-500 dark:text-slate-400 shrink-0">
+                {team.wins}–{team.losses}{team.ties ? `–${team.ties}` : ''}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-1 mt-1">
+            {team.isFirstPlace && <Badge tone="gold">🥇 Champion</Badge>}
+            {team.isSecondPlace && <Badge tone="slate">🥈 Runner-up</Badge>}
+            {team.isSeasonChamp && <Badge tone="blue">Reg-season champ</Badge>}
+            {team.isROY && <Badge tone="green" title={awardWinners.oroy}>OROY</Badge>}
+            {team.isHighScoringNonQB && <Badge tone="green" title={awardWinners.highScoringNonQB}>Top non-QB</Badge>}
+            {team.isHighScoringQB && <Badge tone="green" title={awardWinners.highScoringQB}>Top QB</Badge>}
+            {highs > 0 && <Badge tone="slate" title={`Weeks ${team.highWeeks.join(', ')}`}>{highs} weekly high{highs > 1 ? 's' : ''}</Badge>}
+            {(num(team.pf) > 0 || num(team.pa) > 0) && (
+              <span className="text-[11px] text-slate-400 tabular-nums">PF {num(team.pf).toFixed(1)} · PA {num(team.pa).toFixed(1)}</span>
+            )}
           </div>
         </div>
-        <p className="text-xs sm:text-sm text-gray-600">Based on ${leagueConfig.buyIn} × 10 teams</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
-        {/* Playoff Prizes */}
-        <div className="bg-white border-2 border-blue-200 rounded-lg p-4 sm:p-6">
-          <h3 className="text-lg sm:text-xl font-bold text-blue-900 mb-3 sm:mb-4 pb-2 border-b-2 border-blue-200">
-            Playoff Prizes
-          </h3>
-          <div className="space-y-2 sm:space-y-3">
-            <div className="flex justify-between items-center p-2 sm:p-3 bg-yellow-50 rounded">
-              <span className="font-semibold text-base sm:text-lg">🥇 1st Place</span>
-              <span className="text-xl sm:text-2xl font-bold text-green-600">
-                ${leagueConfig.firstPlace}
-              </span>
-            </div>
-            <div className="flex justify-between items-center p-2 sm:p-3 bg-gray-50 rounded">
-              <span className="font-semibold text-base sm:text-lg">🥈 2nd Place</span>
-              <span className="text-xl sm:text-2xl font-bold text-green-600">
-                ${leagueConfig.secondPlace}
-              </span>
-            </div>
+        <div className="text-right sm:contents">
+          <div className={`text-base font-bold tabular-nums sm:text-right ${net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+            {signed(net)}
           </div>
-          <div className="mt-3 sm:mt-4 pt-3 border-t border-gray-200">
-            <div className="flex justify-between text-xs sm:text-sm font-medium">
-              <span>Subtotal:</span>
-              <span className="text-blue-600">
-                ${leagueConfig.firstPlace + leagueConfig.secondPlace}
-              </span>
-            </div>
+          <div className="mt-1 sm:mt-0 sm:text-right">
+            <Pill ok={settled}>{statusText}</Pill>
           </div>
         </div>
+      </button>
 
-        {/* Season Awards */}
-        <div className="bg-white border-2 border-green-200 rounded-lg p-4 sm:p-6">
-          <h3 className="text-lg sm:text-xl font-bold text-green-900 mb-3 sm:mb-4 pb-2 border-b-2 border-green-200">
-            Season Awards
-          </h3>
-          <div className="space-y-2 sm:space-y-3">
-            <div className="flex justify-between items-center p-2 sm:p-3 bg-green-50 rounded">
-              <span className="font-semibold text-sm sm:text-base">🏆 Regular Season Champ</span>
-              <span className="text-lg sm:text-xl font-bold text-green-600">
-                ${leagueConfig.regularSeasonChamp}
-              </span>
-            </div>
-            <div className="flex justify-between items-center p-2 sm:p-3 bg-gray-50 rounded">
-              <span className="font-semibold text-sm sm:text-base">⭐ OROY</span>
-              <span className="text-lg sm:text-xl font-bold text-green-600">
-                ${leagueConfig.oroy}
-              </span>
-            </div>
-            <div className="flex justify-between items-center p-2 sm:p-3 bg-gray-50 rounded">
-              <span className="font-semibold text-sm sm:text-base">💪 High Scoring Non-QB</span>
-              <span className="text-lg sm:text-xl font-bold text-green-600">
-                ${leagueConfig.highScoringNonQB}
-              </span>
-            </div>
-            <div className="flex justify-between items-center p-2 sm:p-3 bg-gray-50 rounded">
-              <span className="font-semibold text-sm sm:text-base">🎯 High Scoring QB</span>
-              <span className="text-lg sm:text-xl font-bold text-green-600">
-                ${leagueConfig.highScoringQB}
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 sm:mt-4 pt-3 border-t border-gray-200">
-            <div className="flex justify-between text-xs sm:text-sm font-medium">
-              <span>Subtotal:</span>
-              <span className="text-green-600">
-                ${leagueConfig.regularSeasonChamp + leagueConfig.oroy + leagueConfig.highScoringNonQB + leagueConfig.highScoringQB}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Weekly High Points */}
-      <div className="bg-white border-2 border-purple-200 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
-        <h3 className="text-lg sm:text-xl font-bold text-purple-900 mb-3 sm:mb-4 pb-2 border-b-2 border-purple-200">
-          Weekly Prizes
-        </h3>
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-0 p-3 sm:p-4 bg-purple-50 rounded-lg">
+      {open && (
+        <div className="px-3 sm:px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/60 dark:bg-slate-800/40">
           <div>
-            <div className="font-semibold text-base sm:text-lg">📊 Weekly High Points</div>
-            <div className="text-xs sm:text-sm text-gray-600 mt-1">14 weeks × ${leagueConfig.weeklyHigh} per week</div>
-          </div>
-          <div className="text-left sm:text-right">
-            <div className="text-xl sm:text-2xl font-bold text-purple-600">
-              ${leagueConfig.weeklyHigh * 14}
+            <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1.5">The math</div>
+            <div className="space-y-1 text-sm tabular-nums">
+              {lines.map((l) => (
+                <div key={l.label} className="flex justify-between gap-3">
+                  <span className="text-slate-600 dark:text-slate-300 truncate">
+                    {l.label}
+                    {l.note ? <span className="text-slate-400"> · {l.note}</span> : null}
+                  </span>
+                  <span className={l.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}>{signed(l.amount)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between gap-3 pt-1.5 mt-1.5 border-t border-slate-200 dark:border-slate-700 font-semibold">
+                <span>Net</span>
+                <span className={net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>{signed(net)}</span>
+              </div>
             </div>
-            <div className="text-xs text-gray-500">(${leagueConfig.weeklyHigh}/week)</div>
+          </div>
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1.5">
+              Weekly highs · {usd(leagueConfig.weeklyHigh)} each
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {Array.from({ length: weeks }, (_, i) => i + 1).map((week) => {
+                const played = week <= completedWeeks;
+                const won = team.highWeeks.includes(week);
+                return (
+                  <span
+                    key={week}
+                    className={`inline-flex items-center justify-center w-8 h-7 rounded-md text-[11px] font-medium tabular-nums ${
+                      won
+                        ? 'bg-emerald-500 text-white'
+                        : played
+                          ? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                          : 'bg-slate-100 text-slate-300 dark:bg-slate-800 dark:text-slate-600'
+                    }`}
+                    title={won ? `Week ${week}: high score` : played ? `Week ${week}` : `Week ${week} (not played yet)`}
+                  >
+                    {week}
+                  </span>
+                );
+              })}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1.5">
+              Through week {completedWeeks} of {weeks}
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Summary */}
-      <div className="bg-gradient-to-r from-blue-900 to-blue-700 text-white rounded-lg p-4 sm:p-6">
-        <h3 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4">Payout Summary</h3>
-        <div className="space-y-2">
-          <div className="flex justify-between items-center pb-2 sm:pb-3 border-b border-blue-400">
-            <span className="text-sm sm:text-base">Total Prize Pool:</span>
-            <span className="font-bold text-lg sm:text-xl">${totalPrizePool}</span>
-          </div>
-          <div className="flex justify-between items-center pb-2 sm:pb-3 border-b border-blue-400">
-            <span className="text-sm sm:text-base">Total Distributed:</span>
-            <span className="font-bold text-lg sm:text-xl">${totalPayouts}</span>
-          </div>
-          <div className="flex justify-between items-center pt-2">
-            <span className="font-bold text-sm sm:text-base">Remaining in Vault:</span>
-            <span className={`font-bold text-xl sm:text-2xl ${totalPrizePool - totalPayouts === 0 ? 'text-green-300' : 'text-yellow-300'}`}>
-              ${totalPrizePool - totalPayouts}
-            </span>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
-};
+}
+
+function Standings({ league }) {
+  const [openIdx, setOpenIdx] = useState(null);
+  const rows = useMemo(() => league.teams.map((t) => ({ team: t, ...ledgerFor(t) })), [league]);
+  const count = rows.length;
+
+  const owing = rows.filter((r) => r.net < 0);
+  const paid = owing.filter((r) => paidOwners.includes(r.team.owner));
+  const unpaid = owing.filter((r) => !paidOwners.includes(r.team.owner));
+  const collected = paid.reduce((s, r) => s - r.net, 0);
+  const outstanding = unpaid.reduce((s, r) => s - r.net, 0);
+  const toSend = rows.filter((r) => r.net > 0 && !sentOwners.includes(r.team.owner));
+  const sendTotal = toSend.reduce((s, r) => s + r.net, 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Summary strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        {[
+          ['Paid up', `${paid.length} of ${owing.length}`, `${usd(collected)} collected`],
+          ['Still owed', usd(outstanding), unpaid.length ? unpaid.map((r) => r.team.owner).join(', ') : 'everyone is in'],
+          ['To send out', usd(sendTotal), toSend.length ? toSend.map((r) => r.team.owner).join(', ') : 'nothing pending'],
+          ['Pot', usd(leagueConfig.buyIn * count), `${usd(leagueConfig.buyIn)} × ${count} teams`],
+        ].map(([label, value, sub]) => (
+          <div key={label} className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200/70 dark:ring-slate-800 px-3 py-2.5">
+            <div className="text-[11px] uppercase tracking-wide text-slate-400">{label}</div>
+            <div className="text-lg font-bold tabular-nums tracking-[-0.3px]">{value}</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate" title={sub}>{sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Venmo */}
+      <div className="flex items-center gap-2.5 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200/70 dark:ring-slate-800 px-3 py-2.5 text-sm">
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold tracking-wide text-white shrink-0" style={{ backgroundColor: '#008CFF' }} aria-hidden>venmo</span>
+        <span className="text-slate-600 dark:text-slate-300">
+          Owe money? Venmo{' '}
+          <a href={leagueConfig.venmoUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-sky-600 dark:text-sky-400 hover:underline">
+            @{leagueConfig.venmoUsername}
+          </a>
+          . Use &quot;For Trip&quot; or something equally vague.
+        </span>
+      </div>
+
+      {/* Standings */}
+      <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200/70 dark:ring-slate-800 overflow-hidden">
+        <div className="hidden sm:grid grid-cols-[2rem_1fr_7rem_6rem] gap-3 px-4 py-2 text-[10px] uppercase tracking-wide text-slate-400 bg-slate-50 dark:bg-slate-800/60">
+          <div>#</div>
+          <div>Team</div>
+          <div className="text-right">Net</div>
+          <div className="text-right">Status</div>
+        </div>
+        {rows.map((r, i) => (
+          <div key={r.team.owner}>
+            <TeamRow
+              team={r.team}
+              rank={i + 1}
+              count={count}
+              open={openIdx === i}
+              onToggle={() => setOpenIdx(openIdx === i ? null : i)}
+              weeks={league.weeks}
+              completedWeeks={league.completedWeeks}
+            />
+            {i + 1 === league.playoffSpots && i + 1 < count && (
+              <div className="flex items-center gap-3 px-4 py-1.5 bg-slate-50 dark:bg-slate-800/60">
+                <div className="flex-grow border-t border-dashed border-slate-300 dark:border-slate-600" />
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Playoff line</span>
+                <div className="flex-grow border-t border-dashed border-slate-300 dark:border-slate-600" />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-slate-400 text-center">
+        Tap a team for the math and its weekly-high record.
+        {league.live
+          ? ` Standings and weekly highs live from Sleeper through week ${league.completedWeeks}.`
+          : league.error
+            ? ` Sleeper unavailable (${league.error}) — showing the numbers saved in config.`
+            : ' Loading standings from Sleeper…'}
+      </p>
+    </div>
+  );
+}
+
+function Payouts({ league }) {
+  const WEEKS = league.weeks;
+  const count = league.teams.length;
+  const pot = leagueConfig.buyIn * count;
+  const groups = [
+    {
+      title: 'Playoffs',
+      items: [
+        ['1st place', leagueConfig.firstPlace],
+        ['2nd place', leagueConfig.secondPlace],
+      ],
+    },
+    {
+      title: 'Season awards',
+      items: [
+        ['Regular-season champ', leagueConfig.regularSeasonChamp],
+        ['Offensive rookie of the year', leagueConfig.oroy],
+        ['Top-scoring non-QB', leagueConfig.highScoringNonQB],
+        ['Top-scoring QB', leagueConfig.highScoringQB],
+      ],
+    },
+    {
+      title: 'Weekly',
+      items: [[`Weekly high score × ${WEEKS} weeks`, leagueConfig.weeklyHigh * WEEKS, `${usd(leagueConfig.weeklyHigh)} per week`]],
+    },
+  ];
+  const distributed = groups.flatMap((g) => g.items).reduce((s, [, amt]) => s + amt, 0);
+  const remaining = pot - distributed;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        {[
+          ['Pot', usd(pot), `${usd(leagueConfig.buyIn)} × ${count}`],
+          ['Paid out', usd(distributed), 'if every prize is claimed'],
+          ['Left over', usd(remaining), remaining === 0 ? 'balanced' : 'check the numbers'],
+        ].map(([label, value, sub]) => (
+          <div key={label} className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200/70 dark:ring-slate-800 px-3 py-2.5">
+            <div className="text-[11px] uppercase tracking-wide text-slate-400">{label}</div>
+            <div className={`text-lg font-bold tabular-nums tracking-[-0.3px] ${label === 'Left over' && remaining !== 0 ? 'text-amber-600' : ''}`}>{value}</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200/70 dark:ring-slate-800 overflow-hidden">
+        {groups.map((g) => (
+          <div key={g.title} className="border-b border-slate-100 dark:border-slate-800 last:border-b-0">
+            <div className="px-4 py-2 text-[10px] uppercase tracking-wide text-slate-400 bg-slate-50 dark:bg-slate-800/60">{g.title}</div>
+            {g.items.map(([label, amt, sub]) => (
+              <div key={label} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                <div>
+                  <div className="font-medium">{label}</div>
+                  {sub && <div className="text-[11px] text-slate-400">{sub}</div>}
+                </div>
+                <div className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{usd(amt)}</div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-slate-400 text-center">
+        Buy-in rises 10% a year. Prizes are set in app/config.js.
+      </p>
+    </div>
+  );
+}
 
 export default function Home() {
-  const [teams] = useState(teamsData);
-  const [activeTab, setActiveTab] = useState('standings');
-  const totalBuyIn = leagueConfig.buyIn * teams.length;
+  const [tab, setTab] = useState('standings');
+  const league = useLeague();
 
   return (
-    <div className="p-2 sm:p-4 max-w-4xl mx-auto">
-      <div className="bg-blue-900 p-4 sm:p-6 rounded-t-lg shadow-lg">
-        <h1 className="text-xl sm:text-2xl font-bold text-white">Dynasty Fantasy Football Dues Tracker</h1>
-        <p className="text-blue-100 text-xs sm:text-sm mt-1">Season {leagueConfig.season}</p>
-      </div>
-      
-      {/* Tab Navigation */}
-      <div className="bg-blue-800 flex shadow-md mt-1 rounded-b-lg overflow-hidden">
-        <button
-          onClick={() => setActiveTab('standings')}
-          className={`flex-1 py-2 sm:py-3 px-2 sm:px-4 text-center text-sm sm:text-base font-medium transition-colors ${
-            activeTab === 'standings'
-              ? 'bg-blue-50 text-blue-900'
-              : 'text-blue-100 hover:bg-blue-700'
-          }`}
-        >
-          Standings & Dues
-        </button>
-        <button
-          onClick={() => setActiveTab('payouts')}
-          className={`flex-1 py-2 sm:py-3 px-2 sm:px-4 text-center text-sm sm:text-base font-medium transition-colors ${
-            activeTab === 'payouts'
-              ? 'bg-blue-50 text-blue-900'
-              : 'text-blue-100 hover:bg-blue-700'
-          }`}
-        >
-          Payout Structure
-        </button>
-      </div>
-
-      {/* Tab Content */}
-      <div className="mt-6">
-        {activeTab === 'standings' && (
-          <>
-            <div className="bg-blue-50 p-3 sm:p-4 rounded-lg mb-4 sm:mb-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
-              <img 
-                src="https://cdn.glitch.global/6efbe97c-0128-473f-9072-368aef793178/venmo.png?v=1736092552830" 
-                alt="Venmo"
-                className="h-4 sm:h-5 w-auto"
-              />
-              <p className="text-xs sm:text-sm">
-                Payment Instructions: If you owe, please send payment via <span className="font-medium">Venmo</span> to{' '}
-                <a 
-                  href={leagueConfig.venmoUrl}
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="text-blue-600 hover:text-blue-800 hover:underline"
-                >
-                  @{leagueConfig.venmoUsername}
-                </a>
-                . Use "For Trip" or similar vague description.
-              </p>
-            </div>
+    <div className="min-h-screen">
+      <header className="max-w-3xl mx-auto px-4 pt-6 pb-3">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <h1 className="text-[26px] font-bold tracking-[-0.8px] leading-tight">Dues Tracker</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{league.league ?? 'Dynasty fantasy football'} · {leagueConfig.season} season · {league.completedWeeks ? `${league.completedWeeks} week${league.completedWeeks === 1 ? '' : 's'} in` : 'preseason'}</p>
           </div>
-
-          <div className="bg-blue-50 p-3 sm:p-4 rounded-lg mb-4 sm:mb-6">
-            <div className="text-base sm:text-lg font-bold">
-              League Buy-in Total: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalBuyIn)}
-              <span className="text-sm sm:text-base font-normal text-gray-600 ml-2">(${leagueConfig.buyIn}/team)</span>
-            </div>
+          <div className="flex bg-slate-200/70 dark:bg-slate-800 rounded-full p-0.5 shrink-0">
+            {[
+              ['standings', 'Dues'],
+              ['payouts', 'Payouts'],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
+                  tab === key ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-
-          {teams.map((team, index) => (
-            <>
-              <TeamRow
-                key={index}
-                position={index + 1}
-                team={team.name}
-                owner={team.owner}
-                pf={team.pf}
-                pa={team.pa}
-                isSeasonChamp={team.isSeasonChamp}
-                isROY={team.isROY}
-                isHighScoringNonQB={team.isHighScoringNonQB}
-                isHighScoringQB={team.isHighScoringQB}
-                highWeeks={team.highWeeks}
-                isPaid={paidOwners.includes(team.owner)}
-                isFirstPlace={team.isFirstPlace}
-                isSecondPlace={team.isSecondPlace}
-              />
-              {index === 5 && (
-                <div className="flex items-center my-4 sm:my-6">
-                  <div className="flex-grow border-t-2 border-gray-400"></div>
-                  <span className="px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-600 bg-gray-100 rounded-full">
-                    PLAYOFF LINE
-                  </span>
-                  <div className="flex-grow border-t-2 border-gray-400"></div>
-                </div>
-              )}
-            </>
-          ))}
-
-          <div className="bg-blue-50 p-3 sm:p-4 rounded-lg mt-4 sm:mt-6 mb-3 sm:mb-4">
-            <div className="flex justify-between items-center mb-2 sm:mb-4">
-              <span className="text-sm sm:text-base font-medium">League Total Vault Balance:</span>
-              <span className="text-base sm:text-lg font-semibold">
-                {new Intl.NumberFormat('en-US', {
-                  style: 'currency',
-                  currency: 'USD',
-                  minimumFractionDigits: 2,
-                }).format(0.00)}
-              </span>
-            </div>
-          </div>
-        </>
-      )}
-
-      {activeTab === 'payouts' && <PayoutStructure />}
-      </div>
+        </div>
+      </header>
+      <main className="max-w-3xl mx-auto px-4 pb-10">
+        {tab === 'standings' ? <Standings league={league} /> : <Payouts league={league} />}
+      </main>
     </div>
   );
 }
