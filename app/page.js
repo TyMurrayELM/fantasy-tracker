@@ -404,9 +404,9 @@ function Standings({ league }) {
               ? 'bg-emerald-600 text-white'
               : copied === 'fail'
                 ? 'bg-red-600 text-white'
-                : 'bg-slate-900 text-white hover:bg-slate-700 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200'
+                : 'bg-white text-white dark:bg-slate-900 dark:text-slate-900 select-none' /* hidden on purpose: same colour as the card */
           }`}
-          title="Copy a recap to paste into the Sleeper league chat"
+          aria-label="Copy recap for the league chat"
         >
           {copied === 'ok' ? 'Copied ✓' : copied === 'fail' ? 'Copy failed' : 'Copy recap'}
         </button>
