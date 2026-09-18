@@ -31,14 +31,21 @@ function useLeague() {
   const [error, setError] = useState(null);
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/sleeper')
-      .then(async (r) => {
-        const j = await r.json();
-        if (!r.ok || !j.success) throw new Error(j.error || `HTTP ${r.status}`);
-        if (!cancelled) setLive(j);
-      })
-      .catch((e) => { if (!cancelled) setError(e.message); });
-    return () => { cancelled = true; };
+    const load = () =>
+      fetch('/api/sleeper', { cache: 'no-store' })
+        .then(async (r) => {
+          const j = await r.json();
+          if (!r.ok || !j.success) throw new Error(j.error || `HTTP ${r.status}`);
+          if (!cancelled) { setLive(j); setError(null); }
+        })
+        .catch((e) => { if (!cancelled) setError(e.message); });
+    load();
+    // Refresh every minute while the page is open, and right away when
+    // you come back to the tab — matches the one-minute server cache.
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') load(); }, 60_000);
+    const onShow = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onShow);
+    return () => { cancelled = true; clearInterval(timer); document.removeEventListener('visibilitychange', onShow); };
   }, []);
 
   return useMemo(() => {
@@ -50,6 +57,8 @@ function useLeague() {
         live: false,
         error,
         fetchedAt: null,
+        weeklyHighs: [],
+        leaders: { qb: [], nonQb: [] },
       };
     }
     const blank = { isSeasonChamp: false, isFirstPlace: false, isSecondPlace: false, isROY: false, isHighScoringNonQB: false, isHighScoringQB: false };
@@ -62,6 +71,8 @@ function useLeague() {
       error: null,
       fetchedAt: live.fetchedAt,
       league: live.league,
+      weeklyHighs: live.weeklyHighs ?? [],
+      leaders: live.leaders ?? { qb: [], nonQb: [] },
     };
   }, [live, error]);
 }
@@ -93,6 +104,12 @@ const rankBar = (i, n) => {
   const t = n <= 1 ? 0 : i / (n - 1); // 0 = top, 1 = bottom
   const hue = 145 - t * 145; // 145 (green) → 0 (red)
   return `hsl(${hue} 60% 48%)`;
+};
+
+const hexToRgba = (hex, a) => {
+  const h = (hex ?? '').replace('#', '');
+  if (h.length !== 6) return `rgba(100,116,139,${a})`;
+  return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
 };
 
 const Badge = ({ children, tone = 'slate', title }) => {
@@ -129,6 +146,11 @@ function TeamRow({ team, rank, count, open, onToggle, weeks, completedWeeks }) {
   const settled = net >= 0 ? isSent : isPaid;
   const statusText = net >= 0 ? (isSent ? 'Sent' : 'To send') : isPaid ? 'Paid' : 'Owes';
   const highs = team.highWeeks.length;
+  // Row colour = the NFL team carrying this roster's points-for so far;
+  // falls back to the rank gradient until Sleeper data lands.
+  const nfl = team.topNflTeam ?? null;
+  const accent = nfl?.color ? `#${nfl.color}` : rankBar(rank - 1, count);
+  const nflTitle = nfl ? `${nfl.name} players: ${nfl.points.toFixed(1)} of this team's starter points (${Math.round(nfl.share * 100)}%)` : undefined;
 
   return (
     <div className="border-b border-slate-100 dark:border-slate-800 last:border-b-0">
@@ -136,12 +158,20 @@ function TeamRow({ team, rank, count, open, onToggle, weeks, completedWeeks }) {
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="w-full text-left grid grid-cols-[1.75rem_1fr_auto] sm:grid-cols-[2rem_1fr_7rem_6rem] items-center gap-3 px-3 sm:px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition"
-        style={{ boxShadow: `inset 3px 0 0 ${rankBar(rank - 1, count)}` }}
+        className="w-full text-left grid grid-cols-[1.75rem_1fr_auto] sm:grid-cols-[2rem_1fr_7rem_6rem] items-center gap-3 px-3 sm:px-4 py-3 transition"
+        style={{
+          boxShadow: `inset 3px 0 0 ${accent}`,
+          background: nfl?.color ? `linear-gradient(90deg, ${hexToRgba(nfl.color, 0.12)} 0%, ${hexToRgba(nfl.color, 0.03)} 45%, transparent 100%)` : undefined,
+        }}
+        title={nflTitle}
       >
         <div className="text-sm font-semibold tabular-nums text-slate-400">{rank}</div>
         <div className="min-w-0">
           <div className="flex items-center gap-2 min-w-0">
+            {nfl?.logo && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={nfl.logo} alt={nfl.name} className="w-5 h-5 object-contain shrink-0" loading="lazy" />
+            )}
             <span className="text-[15px] font-semibold tracking-[-0.2px] truncate">{team.name}</span>
             <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0">{team.owner}</span>
             {team.wins !== null && team.wins !== undefined && (
@@ -221,6 +251,15 @@ function TeamRow({ team, rank, count, open, onToggle, weeks, completedWeeks }) {
             <div className="text-[11px] text-slate-400 mt-1.5">
               Through week {completedWeeks} of {weeks}
             </div>
+            {nfl && (
+              <div className="flex items-center gap-1.5 mt-3 text-xs text-slate-500 dark:text-slate-400">
+                {nfl.logo && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={nfl.logo} alt="" className="w-4 h-4 object-contain" />
+                )}
+                <span>Carried by the <span className="font-medium" style={{ color: accent }}>{nfl.nick}</span>: {nfl.points.toFixed(1)} pts, {Math.round(nfl.share * 100)}% of starter points</span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -228,8 +267,53 @@ function TeamRow({ team, rank, count, open, onToggle, weeks, completedWeeks }) {
   );
 }
 
+// Plain-text recap for the Sleeper league chat: the latest weekly high
+// and who leads the two season point-total awards.
+function buildRecap(league) {
+  const wk = league.completedWeeks;
+  const out = [];
+  out.push(`${league.league ?? 'League'} · ${wk ? `Week ${wk} recap` : `${leagueConfig.season} season`}`);
+  const latest = league.weeklyHighs.length ? league.weeklyHighs[league.weeklyHighs.length - 1] : null;
+  if (latest) {
+    out.push(`🔥 Week ${latest.week} high score: ${latest.winners.map((w) => w.owner).join(' & ')} (${latest.points.toFixed(2)}) → +${usd(leagueConfig.weeklyHigh)}`);
+  }
+  const lead = (list, label, prize) => {
+    if (!list.length) return;
+    const [a, b] = list;
+    const gap = b ? ` (${(a.points - b.points).toFixed(1)} up on ${b.name})` : '';
+    out.push(`${label}: ${a.name}, ${a.points.toFixed(1)} pts${a.owner ? ` — ${a.owner}` : ''}${gap} → +${usd(prize)}`);
+  };
+  lead(league.leaders.qb, '🎯 Top QB so far', leagueConfig.highScoringQB);
+  lead(league.leaders.nonQb, '💪 Top non-QB so far', leagueConfig.highScoringNonQB);
+  return out.join('\n');
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Older iOS Safari: fall back to a hidden textarea + execCommand
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
 function Standings({ league }) {
   const [openIdx, setOpenIdx] = useState(null);
+  const [copied, setCopied] = useState(null); // 'ok' | 'fail' | null
   const rows = useMemo(() => league.teams.map((t) => ({ team: t, ...ledgerFor(t) })), [league]);
   const count = rows.length;
 
@@ -269,6 +353,24 @@ function Standings({ league }) {
           </a>
           . Use &quot;For Trip&quot; or something equally vague.
         </span>
+        <button
+          type="button"
+          onClick={async () => {
+            const ok = await copyText(buildRecap(league));
+            setCopied(ok ? 'ok' : 'fail');
+            setTimeout(() => setCopied(null), 2500);
+          }}
+          className={`ml-auto shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition ${
+            copied === 'ok'
+              ? 'bg-emerald-600 text-white'
+              : copied === 'fail'
+                ? 'bg-red-600 text-white'
+                : 'bg-slate-900 text-white hover:bg-slate-700 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200'
+          }`}
+          title="Copy a recap to paste into the Sleeper league chat"
+        >
+          {copied === 'ok' ? 'Copied ✓' : copied === 'fail' ? 'Copy failed' : 'Copy recap'}
+        </button>
       </div>
 
       {/* Standings */}
@@ -303,7 +405,7 @@ function Standings({ league }) {
       <p className="text-[11px] text-slate-400 text-center">
         Tap a team for the math and its weekly-high record.
         {league.live
-          ? ` Standings and weekly highs live from Sleeper through week ${league.completedWeeks}.`
+          ? ` Live from Sleeper through week ${league.completedWeeks} · refreshes every minute · updated ${new Date(league.fetchedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`
           : league.error
             ? ` Sleeper unavailable (${league.error}) — showing the numbers saved in config.`
             : ' Loading standings from Sleeper…'}
@@ -372,6 +474,33 @@ function Payouts({ league }) {
             ))}
           </div>
         ))}
+      </div>
+      {/* Weekly winners — one line per week, live from Sleeper */}
+      <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200/70 dark:ring-slate-800 overflow-hidden">
+        <div className="px-4 py-2 text-[10px] uppercase tracking-wide text-slate-400 bg-slate-50 dark:bg-slate-800/60 flex justify-between">
+          <span>Weekly high scores · {usd(leagueConfig.weeklyHigh)} each</span>
+          <span>{league.weeklyHighs.length} of {WEEKS} decided</span>
+        </div>
+        {Array.from({ length: WEEKS }, (_, i) => i + 1).map((week) => {
+          const w = league.weeklyHighs.find((x) => x.week === week);
+          return (
+            <div key={week} className={`grid grid-cols-[3rem_1fr_5rem] items-center gap-3 px-4 py-2 text-sm border-t border-slate-100 dark:border-slate-800 ${w ? '' : 'text-slate-400'}`}>
+              <div className="text-xs font-semibold tabular-nums text-slate-400">W{week}</div>
+              {w ? (
+                <div className="min-w-0">
+                  <span className="font-medium">{w.winners.map((x) => x.owner).join(' & ')}</span>
+                  <span className="text-slate-500 dark:text-slate-400 text-xs"> · {w.winners.map((x) => x.name).filter(Boolean).join(' & ')}</span>
+                  {w.winners.length > 1 && <span className="text-[11px] text-amber-600"> · tie</span>}
+                </div>
+              ) : (
+                <div className="text-xs">{league.live ? 'not played yet' : '—'}</div>
+              )}
+              <div className="text-right tabular-nums">
+                {w ? <span className="font-semibold">{w.points.toFixed(2)}</span> : null}
+              </div>
+            </div>
+          );
+        })}
       </div>
       <p className="text-[11px] text-slate-400 text-center">
         Buy-in rises 10% a year. Prizes are set in app/config.js.

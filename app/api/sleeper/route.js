@@ -1,18 +1,75 @@
 // GET /api/sleeper — standings, points, records and weekly high scores for
 // the league in config.js, straight from Sleeper's public API (no auth).
-// Only completed weeks count toward weekly highs. Cached five minutes.
+// Only completed weeks count toward weekly highs. Cached one minute.
 
 import { NextResponse } from 'next/server';
 import { leagueConfig } from '../../config';
 
-export const revalidate = 300;
+export const revalidate = 60;
 
 const BASE = 'https://api.sleeper.app/v1';
 
 async function get(path) {
-  const res = await fetch(`${BASE}${path}`, { next: { revalidate: 300 } });
+  const res = await fetch(`${BASE}${path}`, { next: { revalidate: 60 } });
   if (!res.ok) throw new Error(`Sleeper ${path} → HTTP ${res.status}`);
   return res.json();
+}
+
+// The NFL players file is ~14 MB, far past Next's per-entry data-cache
+// limit, so it lives in module memory and refreshes once a day. Only
+// name / position / team are kept.
+let playerMeta = null; // { at, map: Map<id, { name, pos, team }> }
+const PLAYER_TTL_MS = 24 * 60 * 60 * 1000;
+async function getPlayerMeta() {
+  if (playerMeta && Date.now() - playerMeta.at < PLAYER_TTL_MS) return playerMeta.map;
+  const res = await fetch(`${BASE}/players/nfl`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Sleeper /players/nfl → HTTP ${res.status}`);
+  const all = await res.json();
+  const map = new Map();
+  for (const [id, p] of Object.entries(all)) {
+    map.set(id, { name: p.full_name ?? `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() ?? id, pos: p.position ?? '', team: p.team ?? '' });
+  }
+  playerMeta = { at: Date.now(), map };
+  return map;
+}
+
+// NFL team colours + logos from ESPN, refreshed daily. Keyed by Sleeper's
+// abbreviation (Washington is WAS on Sleeper, WSH on ESPN).
+const SLEEPER_TO_ESPN = { WAS: 'WSH', OAK: 'LV' };
+let nflTeams = null; // { at, map: Map<sleeperAbbr, { abbr, name, nick, color, alt, logo }> }
+const luminance = (hex) => {
+  const h = (hex ?? '').replace('#', '');
+  if (h.length !== 6) return 128;
+  return 0.2126 * parseInt(h.slice(0, 2), 16) + 0.7152 * parseInt(h.slice(2, 4), 16) + 0.0722 * parseInt(h.slice(4, 6), 16);
+};
+// ESPN's primary is sometimes near-black or near-white; prefer the
+// alternate when it reads better as an accent.
+const accentOf = (color, alt) => {
+  if (!color) return alt ?? null;
+  const l = luminance(color);
+  if ((l < 40 || l > 225) && alt) {
+    const la = luminance(alt);
+    if (la >= 40 && la <= 225) return alt;
+  }
+  return color;
+};
+async function getNflTeams() {
+  if (nflTeams && Date.now() - nflTeams.at < PLAYER_TTL_MS) return nflTeams.map;
+  const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams?limit=40', { cache: 'no-store' });
+  if (!res.ok) throw new Error(`ESPN teams → HTTP ${res.status}`);
+  const json = await res.json();
+  const map = new Map();
+  for (const t of json.sports?.[0]?.leagues?.[0]?.teams ?? []) {
+    const team = t.team;
+    const espnAbbr = team.abbreviation;
+    const sleeperAbbr = Object.entries(SLEEPER_TO_ESPN).find(([, e]) => e === espnAbbr)?.[0] ?? espnAbbr;
+    const entry = { abbr: sleeperAbbr, name: team.displayName, nick: team.name, color: accentOf(team.color, team.alternateColor), alt: team.alternateColor ?? null, logo: team.logos?.[0]?.href ?? null };
+    map.set(sleeperAbbr, entry);
+    if (sleeperAbbr !== espnAbbr) map.set(espnAbbr, entry);
+    for (const [s, e] of Object.entries(SLEEPER_TO_ESPN)) if (e === espnAbbr) map.set(s, entry);
+  }
+  nflTeams = { at: Date.now(), map };
+  return map;
 }
 
 // Sleeper splits points into an integer and a hundredths integer (8 = .08)
@@ -44,18 +101,50 @@ export async function GET() {
       Array.from({ length: completedWeeks }, (_, i) => get(`/league/${cfg.leagueId}/matchups/${i + 1}`))
     );
     const highWeeks = new Map(); // roster_id -> [weeks]
+    const weekly = []; // { week, rosterIds, points } — a tie shares the week
     weekPages.forEach((page, i) => {
       const week = i + 1;
       let best = -Infinity;
       for (const m of page) if (typeof m.points === 'number' && m.points > best) best = m.points;
       if (best === -Infinity) return;
+      const winners = [];
       for (const m of page) {
         if (m.points === best) {
           if (!highWeeks.has(m.roster_id)) highWeeks.set(m.roster_id, []);
           highWeeks.get(m.roster_id).push(week);
+          winners.push(m.roster_id);
         }
       }
+      weekly.push({ week, rosterIds: winners, points: best });
     });
+
+    // Starter points per roster per NFL team — which real team is carrying
+    // each fantasy team's points-for.
+    const starterPts = new Map(); // roster_id -> Map<playerId, points>
+    for (const page of weekPages) {
+      for (const m of page) {
+        const acc = starterPts.get(m.roster_id) ?? new Map();
+        (m.starters ?? []).forEach((id, i) => {
+          const p = m.starters_points?.[i] ?? m.players_points?.[id] ?? 0;
+          acc.set(id, (acc.get(id) ?? 0) + p);
+        });
+        starterPts.set(m.roster_id, acc);
+      }
+    }
+
+    // Season point totals per player (every rostered player, bench included)
+    // for the top-QB / top-non-QB awards, plus who holds him now.
+    const playerTotals = new Map(); // id -> { points, rosterId }
+    for (const page of weekPages) {
+      for (const m of page) {
+        for (const [id, p] of Object.entries(m.players_points ?? {})) {
+          const cur = playerTotals.get(id) ?? { points: 0, rosterId: m.roster_id };
+          cur.points += p;
+          cur.rosterId = m.roster_id; // latest completed week wins
+          playerTotals.set(id, cur);
+        }
+      }
+    }
 
     const userById = new Map(users.map((u) => [u.user_id, u]));
     const teams = rosters.map((r) => {
@@ -74,6 +163,56 @@ export async function GET() {
         highWeeks: highWeeks.get(r.roster_id) ?? [],
       };
     });
+    const byRoster = new Map(teams.map((t) => [t.rosterId, t]));
+    const weeklyHighs = weekly.map((w) => ({
+      week: w.week,
+      points: w.points,
+      winners: w.rosterIds.map((id) => ({ owner: byRoster.get(id)?.owner ?? String(id), name: byRoster.get(id)?.name ?? '' })),
+    }));
+    let leaders = { qb: [], nonQb: [] };
+    if (playerTotals.size) {
+      try {
+        const meta = await getPlayerMeta();
+        // Biggest contributing NFL team per roster (starters only = PF)
+        let nfl = null;
+        try { nfl = await getNflTeams(); } catch { nfl = null; }
+        for (const t of teams) {
+          const acc = starterPts.get(t.rosterId);
+          if (!acc) continue;
+          const byTeam = new Map();
+          let total = 0;
+          for (const [id, pts] of acc) {
+            const abbr = meta.get(id)?.team || (meta.get(id)?.pos === 'DEF' ? id : '');
+            if (!abbr) continue;
+            byTeam.set(abbr, (byTeam.get(abbr) ?? 0) + pts);
+            total += pts;
+          }
+          let best = null;
+          for (const [abbr, pts] of byTeam) if (!best || pts > best.pts) best = { abbr, pts };
+          if (best) {
+            const info = nfl?.get(best.abbr);
+            t.topNflTeam = {
+              abbr: best.abbr,
+              name: info?.name ?? best.abbr,
+              nick: info?.nick ?? best.abbr,
+              points: Math.round(best.pts * 100) / 100,
+              share: total > 0 ? Math.round((best.pts / total) * 1000) / 1000 : 0,
+              color: info?.color ?? null,
+              logo: info?.logo ?? null,
+            };
+          }
+        }
+        const rows = [...playerTotals.entries()].map(([id, t]) => {
+          const p = meta.get(id);
+          const holder = byRoster.get(t.rosterId);
+          return { id, name: p?.name ?? id, pos: p?.pos ?? '', team: p?.team ?? '', points: Math.round(t.points * 100) / 100, owner: holder?.owner ?? '' };
+        });
+        const top = (f) => rows.filter(f).sort((a, b) => b.points - a.points).slice(0, 3);
+        leaders = { qb: top((r) => r.pos === 'QB'), nonQb: top((r) => r.pos && r.pos !== 'QB' && r.pos !== 'DEF') };
+      } catch (e) {
+        leaders = { qb: [], nonQb: [], error: e instanceof Error ? e.message : String(e) };
+      }
+    }
     // Sleeper's standings order: record, then points for
     teams.sort((a, b) => b.wins - a.wins || a.losses - b.losses || b.pf - a.pf);
 
@@ -87,6 +226,8 @@ export async function GET() {
       completedWeeks,
       nflWeek: state.week,
       teams,
+      weeklyHighs,
+      leaders,
       fetchedAt: new Date().toISOString(),
     });
   } catch (e) {
