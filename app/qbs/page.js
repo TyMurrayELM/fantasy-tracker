@@ -36,6 +36,54 @@ function useQbs() {
   return { data, error };
 }
 
+// Saved to the iPhone home screen the tracker has no address bar, so the
+// link has to be shareable from the page itself (Tyler, 2026-10-23): the
+// phone's share sheet where there is one, otherwise copy to the clipboard.
+function ShareButton() {
+  const [state, setState] = useState('idle'); // idle | copied | failed
+  // Clipboard API first; a hidden textarea + execCommand where that is
+  // refused (older WebKit, no user-activation grant)
+  const copy = async (text) => {
+    try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch { return false; }
+  };
+  const share = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try { await navigator.share({ title: 'QBs · Dues Tracker', url }); return; } catch (e) {
+        if (e?.name === 'AbortError') return; // closed the share sheet
+      }
+    }
+    setState((await copy(url)) ? 'copied' : 'failed');
+    setTimeout(() => setState('idle'), 1800);
+  };
+  return (
+    <button
+      type="button"
+      onClick={share}
+      aria-label="Share this page"
+      title="Share this page"
+      className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 active:scale-[0.97] transition"
+    >
+      <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 3v12" /><path d="m8 7 4-4 4 4" /><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+      </svg>
+      {state === 'copied' ? 'Link copied' : state === 'failed' ? 'Copy failed' : 'Share'}
+    </button>
+  );
+}
+
 const Pill = ({ slot }) => (
   <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-medium leading-4 ${SLOT[slot].cls}`}>{SLOT[slot].label}</span>
 );
@@ -108,6 +156,9 @@ export default function Qbs() {
             <Link href="/" className="px-3 py-1.5 rounded-full text-sm font-medium text-slate-500 dark:text-slate-400">Dues</Link>
             <span className="px-3 py-1.5 rounded-full text-sm font-medium bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm">QBs</span>
           </nav>
+        </div>
+        <div className="mt-3 flex justify-end">
+          <ShareButton />
         </div>
       </header>
       <main className="max-w-3xl mx-auto px-4 pb-10 space-y-3">
